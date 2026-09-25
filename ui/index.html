@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>University Regulations Assistant</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 720px;
+         margin: 40px auto; padding: 0 16px; line-height: 1.5; }
+  h1 { font-size: 1.3rem; }
+  textarea { width: 100%; box-sizing: border-box; font-size: 1rem; padding: 10px;
+             border-radius: 8px; border: 1px solid #8884; }
+  button { margin-top: 8px; padding: 8px 16px; border-radius: 8px; border: none;
+           background: #4b5bd7; color: white; font-size: 1rem; cursor: pointer; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .answer { margin-top: 20px; padding: 14px; border-radius: 8px; background: #4b5bd71a; }
+  .refused { background: #d7704b1a; }
+  .sources { margin-top: 16px; font-size: 0.9rem; }
+  .source { padding: 8px 0; border-top: 1px solid #8882; }
+  .meta { color: #888; font-size: 0.8rem; }
+  .timing { color: #888; font-size: 0.8rem; margin-top: 8px; }
+  .examples { margin-top: 10px; font-size: 0.85rem; }
+  .examples button { background: #8884; color: inherit; margin: 3px 4px 0 0; padding: 4px 10px; font-size: 0.8rem; }
+</style>
+</head>
+<body>
+  <h1>University Regulations Assistant</h1>
+  <p class="meta">Answers only from the ingested handbooks, by-laws and UGC circulars, with citations. Backend: <code>http://localhost:8000</code></p>
+
+  <textarea id="question" rows="2" placeholder="e.g. What is the punishment for plagiarism in an examination?"></textarea>
+  <br/>
+  <button id="ask">Ask</button>
+
+  <div class="examples">
+    Try:
+    <button onclick="fillAndAsk('What happens if I miss the final exam without permission from the Faculty Board?')">missed exam</button>
+    <button onclick="fillAndAsk('What is the punishment for plagiarism in an examination?')">plagiarism</button>
+    <button onclick="fillAndAsk('How many credits do I need to graduate with a BSc Honours degree?')">credits</button>
+    <button onclick="fillAndAsk('What is the Wi-Fi password for the library?')">unanswerable</button>
+  </div>
+
+  <div id="output"></div>
+
+<script>
+const API = "http://localhost:8000";
+
+function fillAndAsk(q) {
+  document.getElementById("question").value = q;
+  ask();
+}
+
+async function ask() {
+  const q = document.getElementById("question").value.trim();
+  if (!q) return;
+  const btn = document.getElementById("ask");
+  btn.disabled = true;
+  document.getElementById("output").innerHTML = "<p>Thinking…</p>";
+  try {
+    const res = await fetch(`${API}/ask`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question: q }),
+    });
+    const data = await res.json();
+    render(data);
+  } catch (e) {
+    document.getElementById("output").innerHTML =
+      `<p style="color:#d7704b">Couldn't reach the backend at ${API}. Is it running?</p>`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function render(data) {
+  const sourcesHtml = data.sources.map(s => `
+    <div class="source">
+      <div><strong>[${s.doc_id}, p.${s.page_number}]</strong> <span class="meta">fused score ${s.fused_score}</span></div>
+      <div>${s.title}</div>
+      <div class="meta">${s.text_preview}…</div>
+    </div>
+  `).join("");
+
+  document.getElementById("output").innerHTML = `
+    <div class="answer ${data.refused ? 'refused' : ''}">${data.answer}</div>
+    <div class="timing">retrieval ${data.retrieval_ms} ms · generation ${data.generation_ms} ms</div>
+    <div class="sources"><strong>Retrieved passages</strong>${sourcesHtml}</div>
+  `;
+}
+
+document.getElementById("ask").addEventListener("click", ask);
+document.getElementById("question").addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(); }
+});
+</script>
+</body>
+</html>
